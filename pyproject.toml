@@ -57,10 +57,10 @@ full = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/finverse"
-Repository = "https://github.com/yourusername/finverse"
-Issues = "https://github.com/yourusername/finverse/issues"
-Changelog = "https://github.com/yourusername/finverse/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/Nityahapani/finverse"
+Repository = "https://github.com/Nityahapani/finverse"
+Issues = "https://github.com/Nityahapani/finverse/issues"
+Changelog = "https://github.com/Nityahapani/finverse/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["."]
