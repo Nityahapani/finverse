@@ -7,7 +7,7 @@
 [![PyPI version](https://badge.fury.io/py/finverse.svg)](https://pypi.org/project/finverse/)
 [![Python](https://img.shields.io/pypi/pyversions/finverse.svg)](https://pypi.org/project/finverse/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![CI](https://github.com/yourusername/finverse/actions/workflows/ci.yml/badge.svg)](https://github.com/yourusername/finverse/actions)
+[![CI](https://github.com/Nityahapani/finverse/actions/workflows/ci.yml/badge.svg)](https://github.com/Nityahapani/finverse/actions)
 
 Build institutional-grade financial models in Python.<br>
 DCF · LBO · Credit · Portfolio · ML Forecasting · Yield Curves · Tail Risk<br>
