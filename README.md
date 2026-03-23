@@ -1,251 +1,314 @@
-<div align="center">
 
 # finverse
 
-**The ML-powered financial modeling toolkit for Python.**
+**Institutional-grade financial modeling for Python.**
 
-[![PyPI version](https://badge.fury.io/py/finverse.svg)](https://pypi.org/project/finverse/)
-[![Python](https://img.shields.io/pypi/pyversions/finverse.svg)](https://pypi.org/project/finverse/)
+[![PyPI version](https://img.shields.io/pypi/v/finverse?color=blue&label=PyPI)](https://pypi.org/project/finverse/)
+[![Python](https://img.shields.io/pypi/pyversions/finverse)](https://pypi.org/project/finverse/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/Nityahapani/finverse/actions/workflows/ci.yml/badge.svg)](https://github.com/Nityahapani/finverse/actions)
 
-Build institutional-grade financial models in Python.<br>
-DCF · LBO · Credit · Portfolio · ML Forecasting · Yield Curves · Tail Risk<br>
-**No Bloomberg. No API keys. Just Python.**
+DCF · LBO · Credit · Options · Bonds · ML Forecasting · Portfolio · Macro · Audit
+
+**No Bloomberg. No API keys. Pure Python.**
 
 </div>
 
 ---
 
 ```python
-from finverse import pull, DCF, sensitivity
-from finverse.ml import forecast, garch
+pip install finverse
+```
+
+```python
+from finverse import pull, DCF, sensitivity, regime_dcf
+from finverse.ml import garch, cross_sectional
 from finverse.credit import merton, altman
 from finverse.risk import evt, kelly
-from finverse.portfolio import hrp
+from finverse.portfolio import hrp, black_litterman
+from finverse.audit import earnings_quality, manipulation
+from finverse.models.options import call, put, implied_vol
+from finverse.models.bonds import price as bond_price
 from finverse.macro import nelson_siegel
 
 data = pull.ticker("AAPL")
 
-# ML-powered DCF in 3 lines
+# ML-powered DCF
 model = DCF(data).use_ml_forecast()
 model.run().summary()
 sensitivity(model, rows="wacc", cols="terminal_growth")
 
-# Credit analysis
-vol = garch.fit(data)                           # GJR-GARCH volatility
-merton.analyze(data, garch_vol=vol.current_vol) # distance-to-default, PD, spread
-altman.analyze(data).summary()                  # Z-Score distress prediction
+# Regime-conditional DCF — adjusts every assumption to the macro regime
+regime_dcf(data).summary()
 
-# Tail risk and position sizing
-evt.analyze(data).summary()                     # GPD tail VaR at 99.9%
-kelly.from_distribution(data).summary()         # optimal position sizing
+# GARCH vol → Merton credit model
+vol = garch.fit(data, model_type="GJR-GARCH")
+merton.analyze(data, garch_vol=vol.current_vol).summary()
+altman.analyze(data).summary()
 
-# Portfolio construction
+# Manipulation fingerprint — 40+ accounting signals
+manipulation.fingerprint(data).summary()
+
+# Tail risk and Kelly sizing
+evt.analyze(data).summary()
+kelly.from_distribution(data).summary()
+
+# Portfolio with analyst views
 stocks = [pull.ticker(t) for t in ["AAPL", "MSFT", "GOOGL", "JPM", "XOM"]]
-hrp.optimize(stocks).summary()                  # Hierarchical Risk Parity
+black_litterman.optimize(stocks, views=[
+    BLView(["AAPL"], [1.0], expected_ret=0.15, confidence=0.8),
+]).summary()
+
+# Options and bonds
+call(spot=185, strike=190, sigma=0.28, maturity=0.25).summary()
+bond_price(face=1000, coupon_rate=0.05, ytm=0.06, maturity=10).summary()
 
 # Yield curve
-curve = nelson_siegel.us_curve()
-print(f"10Y yield: {curve.yield_at(10):.3%}")
-print(f"10Y-2Y spread: {curve.yield_at(10) - curve.yield_at(2):+.3%}")
+nelson_siegel.us_curve().summary()
 ```
-
----
-
-## Install
-
-```bash
-pip install finverse
-```
-
-```bash
-pip install finverse[full]   # adds seaborn, hmmlearn, reportlab
-pip install finverse[dev]    # adds pytest, black, ruff, mypy
-```
-
-**Requirements:** Python 3.9+, numpy, pandas, scikit-learn, scipy, xgboost, yfinance, rich, openpyxl, matplotlib
 
 ---
 
 ## What's inside
 
-44 modules across 10 layers. Everything runs offline except `pull.*` functions.
+**51 modules** across 11 layers. Everything runs fully offline except `pull.*` data functions.
 
-### Data layer — `finverse.pull`
+---
 
-```python
-from finverse import pull
+### Data — `finverse.pull`
 
-data  = pull.ticker("AAPL")           # financials + price history via yfinance (free, no key)
-filings = pull.edgar("AAPL", "10-K")  # SEC EDGAR filings + XBRL facts (free, no key)
-macro = pull.fred("GDP", "UNRATE")    # Federal Reserve macro data (free key at fred.stlouisfed.org)
-snap  = pull.macro_snapshot()         # rates, inflation, VIX, credit spreads
-```
-
-### Valuation models — `finverse.models`
-
-| Model | Class / function | Description |
+| Function | Source | Key needed |
 |---|---|---|
-| DCF | `DCF(data)` | Discounted cash flow, ML-assisted assumptions, monte carlo |
-| LBO | `LBO(assumptions)` | Full buyout with senior/sub debt, IRR, MoM |
-| Three-statement | `ThreeStatement(data)` | Linked IS / BS / CF model |
-| Comparable comps | `comps(data, peers=[...])` | Auto peer detection + implied price range |
-| Dividend models | `gordon()`, `h_model()`, `multistage()` | Gordon Growth, H-Model, Multistage DDM |
-| Sum of Parts | `sotp(segments, ...)` | Segment-by-segment EV aggregation |
-| Macro nowcast | `macro.nowcast()` | GDP nowcast, recession probability, yield curve signal |
-| APV | `valuation.apv.analyze(data)` | Adjusted Present Value (Modigliani-Miller) |
-| Real options | `valuation.real_options.expand/abandon/defer()` | Black-Scholes corporate options |
+| `pull.ticker("AAPL")` | yfinance — financials, price history | None |
+| `pull.edgar("AAPL", "10-K")` | SEC EDGAR — filings, XBRL facts | None |
+| `pull.fred("GDP", "UNRATE")` | Federal Reserve macro data | Free at fred.stlouisfed.org |
+| `pull.macro_snapshot()` | Rates, inflation, VIX, credit spreads | Free |
+
+---
+
+### Valuation — `finverse.models`
+
+| Model | How to use | What it does |
+|---|---|---|
+| `DCF` | `DCF(data).use_ml_forecast().run()` | Discounted cash flow with ML-estimated assumptions |
+| `LBO` | `LBO(LBOAssumptions(...)).run()` | Full buyout: debt schedule, IRR, MoM |
+| `ThreeStatement` | `ThreeStatement(data).run()` | Linked IS / BS / CF |
+| `comps` | `comps(data, peers=["MSFT","GOOGL"])` | Comparable company analysis, implied price range |
+| `regime_dcf` | `regime_dcf(data)` | DCF with per-regime assumptions, probability-weighted price |
+| `synthetic_peers` | `build_peers(data, {"software":0.6,"hardware":0.4})` | Peer multiples for companies with no clean peer set |
+| `gordon` | `gordon(dividend=1.84, growth_rate=0.04, ke=0.085)` | Gordon Growth Model |
+| `h_model` | `h_model(dividend=1.84, high_growth=0.15, ...)` | H-Model DDM |
+| `multistage` | `multistage(dividend=1.84, stage1_growth=0.15, ...)` | Multistage DDM |
+| `sotp` | `sotp([Segment(...), Segment(...)])` | Sum of the Parts |
+| `apv` | `apv.analyze(data)` | Adjusted Present Value (Modigliani-Miller) |
+| `real_options` | `real_options.expand(500, 200, 0.30, 3.0)` | Expand, abandon, defer (Black-Scholes) |
+| `macro.nowcast` | `macro.nowcast()` | GDP nowcast, recession probability, regime |
+| `options` | `call(185, 190, 0.28, 0.25)` | European call/put, all 5 Greeks, IV solver |
+| `bonds` | `bond_price(1000, 0.05, 0.06, 10)` | Price, YTM, duration, convexity, DV01 |
 
 ```python
-from finverse import DCF, LBO, ThreeStatement, comps
-from finverse.models.lbo import LBOAssumptions
+from finverse import pull, DCF, sensitivity, scenarios, regime_dcf
+from finverse.models.lbo import LBO, LBOAssumptions
 from finverse.models.ddm import gordon, h_model, multistage
 from finverse.models.sotp import Segment, analyze as sotp
-from finverse.valuation import real_options, apv
+from finverse.models.synthetic_peers import build_peers
+from finverse.models.options import call, put, implied_vol, vol_surface
+from finverse.models.bonds import price as bond_price, ytm_from_price
 
-# DCF — manual or ML-assisted
-model = DCF.manual(base_revenue=383.0, shares_outstanding=15.4, net_debt=50.0)
-model.set(wacc=0.095, terminal_growth=0.025)
+data = pull.ticker("AAPL")
+
+# --- DCF ---
+model = DCF(data).use_ml_forecast()
 model.run().summary()
-print(model.implied_price, model.ev)
+sensitivity(model, rows="wacc", cols="terminal_growth")
+scenarios(model,
+    bull={"wacc": 0.085, "revenue_growth": 0.12},
+    base={"wacc": 0.095, "revenue_growth": 0.08},
+    bear={"wacc": 0.115, "revenue_growth": 0.03},
+)
 
-# LBO
+# --- Regime-Conditional DCF ---
+# Adjusts WACC, growth, margins per detected macro regime
+# Returns probability-weighted implied price across all regimes
+result = regime_dcf(data)
+result.summary()
+print(f"Current regime:    {result.current_regime}")
+print(f"Regime-weighted:   ${result.weighted_price:.2f}")
+print(f"Static DCF:        ${result.static_price:.2f}")
+print(f"Regime adjustment: {result.regime_discount_pct:+.1%}")
+
+# --- LBO ---
 result = LBO(LBOAssumptions(
     entry_ebitda=150, entry_ev_ebitda=10.0,
-    equity_pct=0.40, hold_years=5,
-    exit_ev_ebitda=12.0, revenue_growth=0.08,
+    equity_pct=0.40, hold_years=5, exit_ev_ebitda=12.0,
 )).run()
 print(f"IRR: {result.irr:.1%}  MoM: {result.mom:.2f}x")
 
-# Dividend Discount Models
-r = gordon(dividend=1.84, growth_rate=0.04, cost_of_equity=0.085)
-r = h_model(dividend=1.84, high_growth=0.15, stable_growth=0.04, half_life=7)
-r = multistage(dividend=1.84, stage1_growth=0.15, stage1_years=5,
-               stage2_growth=0.08, stage2_years=5, terminal_growth=0.04)
+# --- Synthetic Peers ---
+# For conglomerates or niche companies with no clean peer set
+result = build_peers(data, segment_weights={
+    "hardware": 0.55,
+    "software": 0.25,
+    "consumer_staples": 0.20,
+})
+result.summary()
+p25, median, p75 = result.implied_price_range
 
-# Sum of the Parts
-result = sotp([
-    Segment("Search",  metric_value=80000, metric_type="ebitda", multiple=18.0),
-    Segment("Cloud",   metric_value=35000, metric_type="revenue", multiple=8.0),
-    Segment("YouTube", metric_value=12000, metric_type="ebitda", multiple=20.0),
-], ticker="GOOGL", net_debt=-100.0, shares_outstanding=12.8)
+# --- Options ---
+c = call(spot=185, strike=190, sigma=0.28, maturity=0.25)
+c.summary()
+# → price, delta, gamma, theta, vega, rho
 
-# Real options
-real_options.expand(project_value=500, expansion_cost=200, sigma=0.30, time_to_expiry=3).summary()
-real_options.abandon(project_value=300, salvage_value=150, sigma=0.35, time_to_expiry=2).summary()
-real_options.defer(project_value=400, investment_cost=350, sigma=0.25, time_to_expiry=2).summary()
+p = put(spot=185, strike=190, sigma=0.28, maturity=0.25)
+
+# Solve implied vol from market price
+iv = implied_vol(market_price=9.03, spot=185, strike=190, maturity=0.25)
+print(f"Implied vol: {iv.implied_vol:.2%}")
+
+# Vol surface across strikes and maturities
+surface = vol_surface(spot=185, sigma=0.28)
+
+# --- Bonds ---
+b = bond_price(face=1000, coupon_rate=0.05, ytm=0.06, maturity=10)
+b.summary()
+# → clean price, dirty price, YTM, Macaulay duration,
+#   modified duration, convexity, DV01, yield scenario table
+
+# Solve YTM from market price
+b2 = ytm_from_price(market_price=950, coupon_rate=0.05, maturity=10)
+print(f"YTM: {b2.ytm:.4%}")
 ```
 
-### ML layer — `finverse.ml`
+---
+
+### ML — `finverse.ml`
 
 | Module | Algorithm | What it does |
 |---|---|---|
-| `ml.forecast` | XGBoost + bootstrap | Per-company revenue/margin forecasts with 80% CI |
-| `ml.cross_sectional` | GBM on universe | Train on 80+ companies, forecast any target ticker |
-| `ml.garch` | MLE (scipy) | GARCH(1,1), EGARCH, GJR-GARCH volatility modeling |
+| `ml.forecast` | XGBoost + bootstrap | Revenue/margin forecasts with 80% confidence intervals |
+| `ml.cross_sectional` | GBM on universe | Train on 80+ companies simultaneously, forecast any ticker |
+| `ml.garch` | MLE via scipy | GARCH(1,1), EGARCH, GJR-GARCH volatility — no arch package needed |
 | `ml.factor` | Rolling OLS | Fama-French factor decomposition (market, value, momentum, quality) |
-| `ml.regime` | Hidden Markov Model | Market regime detection (expansion/contraction/stress/recovery) |
-| `ml.nlp` | Lexicon-based | Financial text sentiment (no external model needed) |
+| `ml.regime` | Hidden Markov Model | Regime detection — expansion, slowdown, contraction, recovery |
+| `ml.nlp` | Lexicon | Financial text sentiment (no external model) |
 | `ml.cluster` | KMeans / DBSCAN | ML peer group detection from financial ratios |
 | `ml.anomaly` | Isolation Forest + Beneish | Earnings anomaly detection |
-| `ml.causal` | Granger causality | Which macro variables actually drive earnings |
+| `ml.causal` | Granger causality | Which macro variables drive earnings |
 
 ```python
-from finverse.ml import forecast, garch, cross_sectional, factor, regime, anomaly, causal
+from finverse.ml import forecast, garch, cross_sectional, factor, regime
 
 # Revenue forecast with confidence intervals
 fc = forecast.revenue(data, n_years=5)
 fc.summary()
 # → point estimates, 80% CI, implied CAGR, key drivers
 
-# GARCH volatility
-vol = garch.fit(data, model_type="GJR-GARCH")  # also "GARCH(1,1)", "EGARCH"
+# GARCH volatility — picks up leverage effect (bad news = more vol)
+vol = garch.fit(data, model_type="GJR-GARCH")
 vol.summary()
-# → ω, α, β, γ, persistence, current vol, multi-step forecast
+garch.compare(data)  # compare all 3 models by AIC
 
-# Compare all GARCH models by AIC
-garch.compare(data)
-
-# Cross-sectional: trained on universe of companies
+# Cross-sectional — trained on universe, not just the company's own history
 cs = cross_sectional.forecast(data, target="revenue_growth")
 cs.summary()
-# → forecast with CI, percentile rank vs universe, feature importance
+# → forecast, 80% CI, percentile rank vs 80-company universe, feature importance
 
 # Factor decomposition
 factors = factor.decompose(data, window="3y")
 factors.summary()
-# → market β, value, momentum, quality, low-vol, size loadings
 
-# Market regime detection
+# Regime detection — feeds into regime_dcf automatically
 r = regime.detect(data.price_history["Close"])
-r.summary()
 print(f"Current regime: {r.current_regime.value}")
-print(f"WACC adjustment: {r.wacc_adjustment:+.1%}")
 adjusted_wacc = r.adjust_wacc(0.095)
-
-# Macro → earnings causality
-result = causal.analyze(data)
-result.summary()
-# → ranks GDP, rates, inflation etc. by causal strength on earnings
 ```
 
+---
+
 ### Risk — `finverse.risk`
+
+| Module | Method | What it does |
+|---|---|---|
+| `risk.monte_carlo` | Monte Carlo | 10k DCF scenarios, price distribution, P(upside) |
+| `risk.var` | Historical + parametric | VaR(95/99%), CVaR, max drawdown, stress scenarios |
+| `risk.evt` | Peaks-Over-Threshold (GPD) | Tail VaR at 99%, 99.9%, 99.99% — beyond normal distribution |
+| `risk.kelly` | Continuous + binary + multi-asset | Optimal position sizing, wealth path simulation |
 
 ```python
 from finverse.risk import monte_carlo, var, evt, kelly
 
-# Monte Carlo over DCF assumptions
+# Monte Carlo
 mc = monte_carlo.simulate(model, n_simulations=10_000)
 mc.summary()
 mc.plot()
-# → price distribution, P(upside), 5th–95th percentile range
 
-# VaR and CVaR
-r = var.var(data, confidence=0.95, method="historical")
-r.summary()
-# → VaR(95%), VaR(99%), CVaR(95%), CVaR(99%), max drawdown, stress scenarios
-
-# Extreme Value Theory — tail risk beyond normal distribution
+# Extreme Value Theory — models the tail that normal distribution misses
 tail = evt.analyze(data)
 tail.summary()
-# → GPD parameters (ξ, σ), VaR(99%), VaR(99.9%), VaR(99.99%), return periods
-evt.compare_tails([apple, msft, googl])  # rank stocks by tail heaviness
+# → ξ (tail index), VaR(99%), VaR(99.9%), VaR(99.99%), return periods
+# e.g. "a 15% daily loss is expected once every 47 years"
+evt.compare_tails([pull.ticker(t) for t in ["AAPL","MSFT","GOOGL"]])
 
-# Kelly criterion — optimal position sizing
-k = kelly.from_distribution(data)        # continuous Kelly f* = μ/σ²
-k = kelly.from_binary(win_prob=0.55, win_return=0.10, loss_return=0.08)
+# Kelly criterion
+k = kelly.from_distribution(data)      # continuous: f* = μ/σ²
 k.summary()
-# → full/half/quarter Kelly fractions, expected geometric growth rates
-paths = k.simulate(n_periods=252)        # wealth path simulation
-kelly.multi_asset([apple, msft, googl]) # covariance-matrix Kelly
+# → full Kelly, half Kelly, quarter Kelly, expected geometric growth
+paths = k.simulate(n_periods=252)       # wealth path simulation
+
+k2 = kelly.from_binary(win_prob=0.55, win_return=0.10, loss_return=0.08)
+k3 = kelly.multi_asset([pull.ticker(t) for t in ["AAPL","MSFT","GOOGL"]])
 ```
+
+---
 
 ### Portfolio — `finverse.portfolio`
 
+| Module | Method | What it does |
+|---|---|---|
+| `portfolio.optimizer` | Mean-variance | Max Sharpe, min vol, risk parity, equal weight, efficient frontier |
+| `portfolio.hrp` | Hierarchical clustering | Hierarchical Risk Parity — no matrix inversion, more stable |
+| `portfolio.shrinkage` | Ledoit-Wolf | Shrinks covariance toward constant correlation target |
+| `portfolio.black_litterman` | Bayesian updating | Blends CAPM equilibrium with analyst views |
+| `portfolio.cvar_opt` | Linear programming | Minimises CVaR directly — tail-risk optimal weights |
+
 ```python
 from finverse.portfolio import optimizer, hrp, shrinkage
+from finverse.portfolio.black_litterman import optimize as bl_optimize, BLView
+from finverse.portfolio.cvar_opt import optimize as cvar_optimize
 
 stocks = [pull.ticker(t) for t in ["AAPL", "MSFT", "GOOGL", "JPM", "XOM"]]
 
-# Mean-variance optimization
+# Standard MVO
 optimizer.optimize(stocks, method="max_sharpe").summary()
 optimizer.optimize(stocks, method="min_vol").summary()
 optimizer.optimize(stocks, method="risk_parity").summary()
-optimizer.optimize(stocks, method="equal_weight").summary()
 
-# Hierarchical Risk Parity — no matrix inversion, more stable
+# HRP — no matrix inversion, works with correlated assets
 hrp.optimize(stocks).summary()
 hrp.optimize(stocks).compare_to_equal_weight()
 
-# Ledoit-Wolf covariance shrinkage — better conditioned matrix
+# Ledoit-Wolf shrinkage
 cov = shrinkage.shrink(stocks, method="constant_correlation")
 cov.summary()
-# → shrinkage coefficient, condition number before/after
 
-# Efficient frontier
-ef = optimizer.frontier(stocks)
+# Black-Litterman — combine equilibrium with views
+views = [
+    BLView(["AAPL"], [1.0], expected_ret=0.15, confidence=0.8),
+    # "AAPL returns 15%, high confidence"
+    BLView(["MSFT", "GOOGL"], [1.0, -1.0], expected_ret=0.03, confidence=0.6),
+    # "MSFT outperforms GOOGL by 3%"
+]
+bl = bl_optimize(stocks, views=views)
+bl.summary()
+# → posterior returns, how much views shifted each asset, optimal weights
+
+# CVaR optimization — minimises tail loss via linear programming
+cvar = cvar_optimize(stocks, confidence=0.95)
+cvar.summary()
+# → weights that minimise expected loss in worst 5% of days
 ```
+
+---
 
 ### Credit — `finverse.credit`
 
@@ -253,21 +316,63 @@ ef = optimizer.frontier(stocks)
 from finverse.credit import merton, altman
 from finverse.ml import garch
 
-# Merton structural model — equity as call option on firm assets
+# Merton structural credit model
 vol = garch.fit(data)
 r = merton.analyze(data, garch_vol=vol.current_vol)
 r.summary()
-# → asset value, asset vol, distance-to-default, PD(1y), PD(5y),
-#   implied credit spread (bps), approximate rating (AAA → D)
+# → asset value, asset vol, distance-to-default (σ)
+#   PD(1y), PD(5y), implied credit spread (bps), rating (AAA → D)
 
-# Altman Z-Score family — financial distress prediction
-r = altman.analyze(data)                    # auto-selects model
-r = altman.analyze(data, model="Z-Score")   # public manufacturers
-r = altman.analyze(data, model="Z'-Score")  # private companies
-r = altman.analyze(data, model="Z''-Score") # non-manufacturers / services
+# Altman Z-Score
+r = altman.analyze(data)                     # auto-selects variant
+r = altman.analyze(data, model="Z-Score")    # public manufacturers
+r = altman.analyze(data, model="Z'-Score")   # private companies
+r = altman.analyze(data, model="Z''-Score")  # non-manufacturers
 r.summary()
 # → score, zone (safe / grey / distress), component ratios
 ```
+
+---
+
+### Audit — `finverse.audit`
+
+| Module | Method | What it does |
+|---|---|---|
+| `audit()` | Rule-based | Model health check: bad assumptions, broken logic, 0–100 score |
+| `audit.manipulation` | 40-signal Random Forest | Accounting manipulation probability, Beneish M-Score, top drivers |
+| `audit.earnings_quality` | 10-factor composite | Accruals, OCF/NI, persistence, smoothness, FCF — A–F grade |
+| `audit.benford` | Chi-square + MAD | Benford's Law test for number manipulation |
+| `audit.loughran_mcdonald` | LM dictionary | Financial text: negative, uncertainty, litigious, modal scores |
+
+```python
+from finverse import audit
+from finverse.audit import manipulation, earnings_quality, benford, loughran_mcdonald
+
+# Model health check
+audit(model).summary()
+# → score, errors, warnings, specific fix suggestions
+
+# Manipulation fingerprint — 40+ signals, not just Beneish
+result = manipulation.fingerprint(data)
+result.summary()
+# → probability 0–1, risk level, top 8 risk drivers with scores
+# e.g. "AR growth exceeding revenue growth (0.18), SGA inflation (0.14)"
+
+# Earnings quality
+earnings_quality.score(data).summary()
+# → 0–100 score, A–F grade, 10 signals scored individually
+
+# Benford's Law
+benford.test_financials(data).summary()
+# → MAD, chi-square p-value, conformity, flagged digits
+
+# LM sentiment on filing text
+result = loughran_mcdonald.analyze(filing_text, source="AAPL 10-K 2024")
+result.summary()
+loughran_mcdonald.compare_filings({"2022": t1, "2023": t2, "2024": t3})
+```
+
+---
 
 ### Macro — `finverse.macro`
 
@@ -275,71 +380,35 @@ r.summary()
 from finverse.macro import var_model, nelson_siegel
 from finverse.models.macro import nowcast
 
-# GDP nowcast + recession probability
-macro = nowcast()
-macro.summary()
+# Macro nowcast
+result = nowcast()
+result.summary()
 # → GDP nowcast (%), recession probability (12M), yield curve signal,
-#   regime (expansion/slowdown/contraction/recovery),
-#   4-quarter inflation + fed rate path
+#   regime, 4-quarter inflation path, 4-quarter fed rate path
 
-# Vector Autoregression with impulse response functions
-import pandas as pd
-macro_data = pull.fred("UNRATE", "FEDFUNDS", "CPIAUCSL")
-quarterly = macro_data.resample("QE").last().pct_change().dropna()
+# VAR with impulse response functions
+macro = pull.fred("UNRATE", "FEDFUNDS", "CPIAUCSL")
+quarterly = macro.resample("QE").last().pct_change().dropna()
 result = var_model.fit(quarterly, n_lags=2, forecast_horizon=8)
 result.summary()
-result.plot_irf("FEDFUNDS")   # impulse response to rate shock
-result.irf("FEDFUNDS", "UNRATE")  # specific variable pair
-var_model.select_lag_order(quarterly, max_lags=6)  # AIC/BIC lag selection
+result.plot_irf("FEDFUNDS")                    # shock to fed funds
+result.irf("FEDFUNDS", "UNRATE")               # specific pair
+var_model.select_lag_order(quarterly, max_lags=6)
 
 # Nelson-Siegel yield curve
-maturities = [0.25, 1, 2, 5, 10, 30]
-yields     = [0.053, 0.052, 0.048, 0.044, 0.044, 0.045]
-curve = nelson_siegel.fit(maturities, yields)
-curve = nelson_siegel.us_curve()         # uses typical current levels
+curve = nelson_siegel.us_curve()
 curve.summary()
-print(curve.yield_at(7))                 # interpolate any maturity
-print(curve.forward_rate(5))             # instantaneous forward rate
-print(curve.level, curve.slope)          # β₀ and β₁ factors
-curve.curve().plot()                     # full fitted curve as pd.Series
+print(f"10Y yield:       {curve.yield_at(10):.3%}")
+print(f"5Y forward rate: {curve.forward_rate(5):.3%}")
+print(f"Level (β₀):      {curve.level:.3%}")
+print(f"Slope (β₁):      {curve.slope:.3%}")
+curve.curve().plot()
 
-# Svensson extension (two humps)
+# Svensson (two humps)
 curve = nelson_siegel.fit(maturities, yields, model="Svensson")
 ```
 
-### Audit — `finverse.audit`
-
-```python
-from finverse import audit
-from finverse.audit import earnings_quality, benford, loughran_mcdonald
-
-# Model health check — catches bad assumptions, broken logic
-audit(model).summary()         # DCF
-audit(lbo_model).summary()     # LBO
-audit(ts_model).summary()      # ThreeStatement
-audit(excel_path="model.xlsx") # Excel file — flags hardcoded numbers in formulas
-# → 0–100 score, errors / warnings / info, specific suggestions
-
-# Earnings quality — 10-factor composite score
-r = earnings_quality.score(data)
-r.summary()
-# → 0–100 score, A–F grade, 10 individual signals:
-#   accruals ratio, OCF/NI coverage, revenue cash conversion,
-#   earnings persistence (AR1), smoothness, loss avoidance pattern,
-#   asset growth signal, margin stability, WC efficiency, FCF consistency
-
-# Benford's Law — statistical test for data manipulation
-benford.test_financials(data).summary()     # from TickerData
-benford.test(income_statement_values).summary()
-# → MAD, chi-square p-value, conformity rating, flagged digits
-
-# Loughran-McDonald financial sentiment dictionary
-result = loughran_mcdonald.analyze(filing_text, source="AAPL 10-K 2024")
-result.summary()
-# → positive/negative/uncertainty/litigious/modal scores
-#   net sentiment, tone label, top positive/negative words
-loughran_mcdonald.compare_filings({"2022": t1, "2023": t2, "2024": t3})
-```
+---
 
 ### Analysis — `finverse.analysis`
 
@@ -349,32 +418,30 @@ from finverse.screen import screener
 from finverse import backtest
 
 # 2-variable sensitivity heatmap
-sensitivity(model, rows="wacc", cols="terminal_growth")           # color-coded
+sensitivity(model, rows="wacc", cols="terminal_growth")
 sensitivity(model, rows="ebitda_margin", cols="revenue_growth", n=7)
 
-# Bull / base / bear scenario engine
+# Bull / base / bear scenarios
 scenarios(model,
     bull={"wacc": 0.085, "ebitda_margin": 0.36, "revenue_growth": 0.12},
     base={"wacc": 0.095, "ebitda_margin": 0.32, "revenue_growth": 0.08},
     bear={"wacc": 0.115, "ebitda_margin": 0.26, "revenue_growth": 0.03},
 )
 
-# ML stock screener — composite score across sector
-screener.undervalued(sector="tech").summary()      # also "finance", "healthcare", "energy"
-screener.by_criteria(
-    ["AAPL", "MSFT", "GOOGL"],
-    min_revenue_growth=0.05, max_pe=40,
-)
+# ML stock screener
+screener.undervalued(sector="tech").summary()
+screener.by_criteria(["AAPL","MSFT","GOOGL"], min_revenue_growth=0.05, max_pe=40)
 
-# Signal-based backtesting
+# Signal backtesting
 prices = data.price_history["Close"]
-signal = prices.pct_change(63).shift(1)   # 3-month momentum signal
-result = backtest.run(signal, prices, "Momentum")
+signal = prices.pct_change(63).shift(1)
+result = backtest.run(signal, prices, "3M Momentum")
 result.summary()
 result.plot()
-backtest.momentum(data, lookback=252).summary()
 backtest.dcf_signal(model, data).summary()
 ```
+
+---
 
 ### Export — `finverse.export`
 
@@ -382,67 +449,78 @@ backtest.dcf_signal(model, data).summary()
 from finverse.export import to_excel, to_report
 
 to_excel(model, "aapl_dcf.xlsx")
-# → banker-formatted Excel: blue cells = formulas, green = outputs,
-#   gray = section headers, percentage/currency formats
+# → banker-formatted Excel: blue = formulas, green = outputs, gray = headers
 
 to_report(model, "aapl_summary.txt")
-# → plain text one-pager with all assumptions and valuation outputs
+# → plain text one-pager with all assumptions and outputs
 ```
+
+---
+
+## Full module list
+
+```
+finverse/
+├── pull/              ticker, edgar, fred
+├── models/            dcf, lbo, three_statement, comps, regime_dcf,
+│                      synthetic_peers, ddm, sotp, options, bonds,
+│                      real_options, apv, macro
+├── ml/                forecast, cross_sectional, garch, factor,
+│                      regime, nlp, cluster, anomaly, causal
+├── risk/              monte_carlo, var, evt, kelly
+├── portfolio/         optimizer, hrp, shrinkage,
+│                      black_litterman, cvar_opt
+├── credit/            merton, altman
+├── valuation/         real_options, apv
+├── macro/             var_model, nelson_siegel
+├── audit/             model_audit, manipulation, earnings_quality,
+│                      benford, loughran_mcdonald
+├── analysis/          sensitivity, scenarios
+├── screen/            screener
+├── backtest/          engine
+└── export/            excel, report
+```
+
+---
+
+## Install
+
+```bash
+pip install finverse
+pip install finverse[full]    # seaborn, hmmlearn, reportlab
+pip install finverse[dev]     # pytest, black, ruff, mypy
+```
+
+**Requirements:** Python 3.9+, numpy, pandas, scikit-learn, scipy, xgboost, yfinance, rich, openpyxl, matplotlib
 
 ---
 
 ## FRED API key
 
-Only needed for `pull.fred()` and `pull.macro_snapshot()`. Everything else works with no keys.
+Only needed for `pull.fred()` and `pull.macro_snapshot()`. All other features work without any keys.
 
 ```bash
 export FRED_API_KEY=your_key_here
 ```
 
-Get one free at [fred.stlouisfed.org/docs/api/api_key.html](https://fred.stlouisfed.org/docs/api/api_key.html) — no credit card, takes 30 seconds.
+Free at [fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html) — no credit card, 30 seconds.
 
 ---
 
-## Running tests
+## Tests
 
 ```bash
 pip install finverse[dev]
 pytest tests/ -v
 ```
 
-All 138 tests use synthetic data — no network calls, no API keys required. Tests run against Python 3.9–3.12.
-
----
-
-## Project structure
-
-```
-finverse/
-├── finverse/
-│   ├── pull/           # data: yfinance, EDGAR, FRED
-│   ├── models/         # DCF, LBO, ThreeStatement, comps, DDM, SOTP, macro
-│   ├── ml/             # forecast, garch, cross_sectional, factor, regime, nlp, cluster, anomaly, causal
-│   ├── risk/           # monte_carlo, var, evt, kelly
-│   ├── portfolio/      # optimizer, hrp, shrinkage
-│   ├── credit/         # merton, altman
-│   ├── valuation/      # real_options, apv
-│   ├── macro/          # var_model, nelson_siegel
-│   ├── analysis/       # sensitivity, scenarios
-│   ├── audit/          # model_audit, earnings_quality, benford, loughran_mcdonald
-│   ├── backtest/       # engine
-│   ├── screen/         # screener
-│   └── export/         # excel, report
-├── tests/              # 138 tests, all synthetic data
-├── examples/           # quickstart.py, credit_analysis.py, finverse_demo.ipynb
-├── pyproject.toml
-└── README.md
-```
+All tests use synthetic data — no network calls, no API keys required. Tested against Python 3.9–3.12.
 
 ---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). PRs welcome — especially for new data sources, additional ML models, and more valuation frameworks.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
