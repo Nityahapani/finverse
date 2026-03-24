@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "finverse"
-version = "0.7.0"
+version = "0.8.0"
 description = "The ML-powered financial modeling toolkit for Python"
 readme = "README.md"
 license = { file = "LICENSE" }
