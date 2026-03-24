@@ -12,9 +12,9 @@ nlp                   — sentiment analysis on financial text
 cluster               — ML peer group detection
 anomaly               — Isolation Forest + Beneish M-Score anomaly detection
 causal                — Granger causality: macro → earnings
-macro_factor_rotation — regime-conditional factor tilt predictions   [v0.7.0]
-earnings_surprise     — beat/miss probability before earnings         [v0.7.0]
-price_target_ensemble — ML-weighted ensemble price target             [v0.7.0]
+macro_factor_rotation — regime-conditional factor tilt predictions   
+earnings_surprise     — beat/miss probability before earnings        
+price_target_ensemble — ML-weighted ensemble price target             
 """
 from finverse.ml import forecast
 from finverse.ml import cross_sectional
