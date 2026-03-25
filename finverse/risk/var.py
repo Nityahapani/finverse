@@ -42,10 +42,7 @@ class VaRResult:
         console.print(table)
 
         if self.stress_scenarios:
-            stress_table = Table(
-                title="Stress scenarios (scaled to this stock's vol vs SPX)",
-                box=box.SIMPLE_HEAD, header_style="bold blue"
-            )
+            stress_table = Table(title="Stress scenarios", box=box.SIMPLE_HEAD, header_style="bold blue")
             stress_table.add_column("Scenario")
             stress_table.add_column("Estimated loss", justify="right")
             for scenario, loss in self.stress_scenarios.items():
@@ -125,19 +122,14 @@ def var(
     drawdown = (cumulative - rolling_max) / rolling_max
     max_dd = float(drawdown.min())
 
-    # Scale historical market shocks to this stock's own volatility
-    # Using SPX annual vol ~16% as the reference for the historical events
-    _spx_vol = 0.16
-    _scale   = ann_vol / _spx_vol   # e.g. a vol-30% stock → scale 1.875x
     stress_scenarios = {
-        "COVID crash (Feb-Mar 2020)":  round(-0.34 * _scale, 4),
-        "GFC (Sep 2008)":              round(-0.47 * _scale, 4),
-        "Dot-com bust (2000-2002)":    round(-0.49 * _scale, 4),
-        "Black Monday (Oct 1987)":     round(-0.22 * _scale, 4),
-        "2022 rate shock":             round(-0.19 * _scale, 4),
-        "1-sigma shock (1 month)":     round(-ann_vol / np.sqrt(12), 4),
-        "2-sigma shock (1 month)":     round(-2 * ann_vol / np.sqrt(12), 4),
-        "3-sigma shock (tail event)":  round(-3 * ann_vol / np.sqrt(12), 4),
+        "COVID crash (Feb-Mar 2020)":    -0.34,
+        "GFC (Sep 2008)":               -0.47,
+        "Dot-com bust (2000-2002)":      -0.49,
+        "Black Monday (Oct 1987)":       -0.22,
+        "2022 rate shock":              -0.19,
+        "1-sigma shock (1 month)":      -ann_vol / np.sqrt(12),
+        "2-sigma shock (1 month)":      -2 * ann_vol / np.sqrt(12),
     }
 
     console.print(
