@@ -57,6 +57,19 @@ class MonteCarloResult:
                 f"\n  Current price: ${self.current_price:.2f}  |  "
                 f"P(upside) = [{color}][bold]{self.prob_upside:.0%}[/bold][/{color}]"
             )
+
+        if self.assumption_distributions:
+            console.print("\n  [dim]Assumptions sampled (Normal distributions):[/dim]")
+            for param, dist in self.assumption_distributions.items():
+                mean_v = dist["mean"]
+                std_v  = dist["std"]
+                lo = mean_v - 2 * std_v
+                hi = mean_v + 2 * std_v
+                fmt = lambda x: f"{x:.1%}" if x < 2 else f"${x:.1f}B"
+                console.print(
+                    f"    {param:<22} μ={fmt(mean_v)}  σ={fmt(std_v)}"
+                    f"  [dim](±2σ: {fmt(lo)} – {fmt(hi)})[/dim]"
+                )
         console.print()
 
     def to_df(self) -> pd.DataFrame:
@@ -148,7 +161,8 @@ def simulate(
     tg_samples            = np.random.normal(a.terminal_growth, terminal_growth_std, n_simulations).clip(0.005, 0.05)
     margin_samples        = np.random.normal(a.ebitda_margin, margin_std, n_simulations).clip(0.01, 0.80)
     growth_samples        = np.random.normal(
-        a.revenue_growth[0] if a.revenue_growth else 0.08,
+        a.revenue_growth[0] if isinstance(a.revenue_growth, (list, tuple)) and a.revenue_growth
+        else (float(a.revenue_growth) if isinstance(a.revenue_growth, (int, float)) else 0.08),
         growth_std, n_simulations
     ).clip(-0.15, 0.40)
 
@@ -219,6 +233,10 @@ def simulate(
             "wacc": {"mean": a.wacc, "std": wacc_std},
             "terminal_growth": {"mean": a.terminal_growth, "std": terminal_growth_std},
             "ebitda_margin": {"mean": a.ebitda_margin, "std": margin_std},
-            "revenue_growth": {"mean": a.revenue_growth[0] if a.revenue_growth else 0.08, "std": growth_std},
+            "revenue_growth": {
+                "mean": a.revenue_growth[0] if isinstance(a.revenue_growth, (list, tuple)) and a.revenue_growth
+                        else (float(a.revenue_growth) if isinstance(a.revenue_growth, (int, float)) else 0.08),
+                "std": growth_std,
+            },
         },
     )
