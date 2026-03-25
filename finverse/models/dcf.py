@@ -180,9 +180,15 @@ class DCF:
         Override any assumption. Chainable.
 
         >>> model.set(wacc=0.10, terminal_growth=0.02, ebitda_margin=0.35)
+
+        revenue_growth accepts either a scalar float (applied uniformly across all
+        projection years) or a list of per-year floats.
         """
         for k, v in kwargs.items():
             if hasattr(self._assumptions, k):
+                # revenue_growth must be a list[float] or None — coerce scalar
+                if k == "revenue_growth" and isinstance(v, (int, float)):
+                    v = [float(v)] * self._assumptions.projection_years
                 setattr(self._assumptions, k, v)
             else:
                 raise ValueError(f"Unknown assumption: '{k}'. Valid: {list(self._assumptions.__dataclass_fields__)}")
@@ -230,8 +236,14 @@ class DCF:
         pv_sum = 0.0
 
         for yr in range(1, n + 1):
-            if a.revenue_growth is not None and len(a.revenue_growth) >= yr:
-                g = a.revenue_growth[yr - 1]
+            if a.revenue_growth is not None:
+                rg = a.revenue_growth
+                if isinstance(rg, (int, float)):
+                    g = float(rg)
+                elif hasattr(rg, '__len__') and len(rg) >= yr:
+                    g = rg[yr - 1]
+                else:
+                    g = 0.08
             else:
                 g = 0.08
 
