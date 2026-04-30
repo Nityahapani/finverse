@@ -5,6 +5,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/finverse?color=blue&label=PyPI)](https://pypi.org/project/finverse/)
 [![Python](https://img.shields.io/pypi/pyversions/finverse)](https://pypi.org/project/finverse/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/finverse?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/finverse)
 [![CI](https://github.com/Nityahapani/finverse/actions/workflows/ci.yml/badge.svg)](https://github.com/Nityahapani/finverse/actions)
 
 DCF · LBO · Credit · Options · Bonds · Derivatives · ML Forecasting · Portfolio · Macro · Audit
